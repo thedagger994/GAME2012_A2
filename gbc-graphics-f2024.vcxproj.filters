@@ -27,4 +27,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\shaders\lines.frag">
+      <Filter>Header Files</Filter>
+    </None>
+    <None Include="assets\shaders\lines.vert">
+      <Filter>Header Files</Filter>
+    </None>
+  </ItemGroup>
 </Project>

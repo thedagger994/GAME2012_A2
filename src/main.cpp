@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <array>
+#include <vector>
 
 constexpr int SCREEN_WIDTH = 1280;
 constexpr int SCREEN_HEIGHT = 720;
@@ -24,6 +25,51 @@ bool IsKeyUp(int key);
 bool IsKeyPressed(int key);
 
 void Print(Matrix m);
+
+std::vector<Vector2> CreateSquares(int iterations) 
+{
+    //Starting points
+    std::vector<Vector2> points;
+    Vector2 curr[4]
+    {
+        { -1.0f,  1.0f },   // top-left
+        {  1.0f,  1.0f },   // top-right
+        {  1.0f, -1.0f },   // bot-right
+        { -1.0f, -1.0f }    // bot-left
+    };
+
+    //Loop the half point of the vertices
+    for (int i = 0; i < iterations; i++)
+    {
+        //get the starting 4 vertices
+        for (int vert = 0; vert < 4; vert++)
+        {
+            points.push_back(curr[vert]);
+        }
+        
+        //Creating a matrix for all 4 vertices to be changed in the next loop
+        Vector2 next[4];
+        //Get the midpoint between each curr vertex and add to next
+        for (int vert = 0; vert < 4; vert++)
+        {
+            next[vert] = (curr[vert] + curr[(vert + 1) % 4]) * 0.5;
+        }
+
+        //Sub the curr vertices with the next ones for the reiteration of the loop
+        for (int vert = 0; vert < 4; vert++)
+        {
+            curr[vert] = next[vert];
+        }
+        //glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(Vector2), next);
+        //glDrawArrays(GL_LINE_LOOP, 0, 4);
+    }
+    return points;
+}
+
+//int to specify the amount of iterations
+int numIterations = 12;
+//Creating the squares and their vertices to be called in the switch case
+std::vector<Vector2> squares = CreateSquares(numIterations);
 
 int main(void)
 {
@@ -81,21 +127,7 @@ int main(void)
         0.0f, 0.0f, 1.0f    // vertex 3
     };
 
-    Vector2 curr[4]
-    {
-        { -1.0f,  1.0f },   // top-left
-        {  1.0f,  1.0f },   // top-right
-        {  1.0f, -1.0f },   // bot-right
-        { -1.0f, -1.0f }    // bot-left
-    };
-
-    Vector2 next[4]
-    {
-        (curr[0] + curr[1]) * 0.5f,
-        (curr[1] + curr[2]) * 0.5f,
-        (curr[2] + curr[3]) * 0.5f,
-        (curr[3] + curr[0]) * 0.5f
-    };
+    
 
     // vao = "Vertex Array Object". A vao is a collection of vbos.
     // vbo = "Vertex Buffer Object". "Buffer" generally means "group of memory".
@@ -124,9 +156,7 @@ int main(void)
 
     glGenBuffers(1, &pboLines);
     glBindBuffer(GL_ARRAY_BUFFER, pboLines);
-    glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vector2), curr, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vector2), nullptr);
-    glEnableVertexAttribArray(0);
+
 
     // In summary, we need 3 things to render:
     // 1. Vertex data -- right now just positions.
@@ -218,12 +248,20 @@ int main(void)
             shaderProgram = shaderLines;
             glUseProgram(shaderProgram);
             glUniform1f(glGetUniformLocation(shaderProgram, "u_a"), a);
-            glLineWidth(10.0f);
+            glLineWidth(2.0f);
             glBindVertexArray(vaoLines);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(Vector2), curr);
-            glDrawArrays(GL_LINE_LOOP, 0, 4);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(Vector2), next);
-            glDrawArrays(GL_LINE_LOOP, 0, 4);
+
+            //Calling the function created before to get the size and data
+            glBufferData(GL_ARRAY_BUFFER, squares.size() * sizeof(Vector2), squares.data(), GL_STATIC_DRAW);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vector2), nullptr);
+            glEnableVertexAttribArray(0);
+
+            //Draw the created vertices with however many loops desired
+            for (int i = 0; i < numIterations; i++)
+            {
+                glDrawArrays(GL_LINE_LOOP, i*4, 4);
+            }
+
             break;
 
         case 4:
