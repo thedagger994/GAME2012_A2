@@ -1,79 +1,89 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "Math.h"
-
-#include <cassert>
-#include <cstdlib>
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <array>
 #include <vector>
+#include <string>
+#include <array>
+#include <cassert>
 
 constexpr int SCREEN_WIDTH = 1280;
 constexpr int SCREEN_HEIGHT = 720;
 
 void APIENTRY glDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message, const void* userParam);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-
 GLuint CreateShader(GLint type, const char* path);
 GLuint CreateProgram(GLuint vs, GLuint fs);
 
 std::array<int, GLFW_KEY_LAST> gKeysCurr{}, gKeysPrev{};
-bool IsKeyDown(int key);
-bool IsKeyUp(int key);
-bool IsKeyPressed(int key);
+
+bool IsKeyDown(int key) { return gKeysCurr[key]; }
+bool IsKeyUp(int key) { return !gKeysCurr[key]; }
+bool IsKeyPressed(int key) { return gKeysCurr[key] && !gKeysPrev[key]; }
 
 void Print(Matrix m);
 
-std::vector<Vector2> CreateSquares(int iterations) 
-{
-    //Starting points
-    std::vector<Vector2> points;
-    Vector2 curr[4]
-    {
-        { -1.0f,  1.0f },   // top-left
-        {  1.0f,  1.0f },   // top-right
-        {  1.0f, -1.0f },   // bot-right
-        { -1.0f, -1.0f }    // bot-left
-    };
+struct Vertex {
+    Vector3 position;
+    Vector2 texCoord;
+    Vector3 normal;
+};
 
-    //Loop the half point of the vertices
-    for (int i = 0; i < iterations; i++)
-    {
-        //get the starting 4 vertices
-        for (int vert = 0; vert < 4; vert++)
-        {
-            points.push_back(curr[vert]);
-        }
-        
-        //Creating a matrix for all 4 vertices to be changed in the next loop
-        Vector2 next[4];
-        //Get the midpoint between each curr vertex and add to next
-        for (int vert = 0; vert < 4; vert++)
-        {
-            next[vert] = (curr[vert] + curr[(vert + 1) % 4]) * 0.5;
-        }
+std::vector<Vertex> LoadOBJ(const char* filename) {
+    std::vector<Vertex> vertices;
+    std::vector<Vector3> positions;
+    std::vector<Vector2> texCoords;
+    std::vector<Vector3> normals;
+    std::vector<unsigned int> posIndices, texIndices, normalIndices;
 
-        //Sub the curr vertices with the next ones for the reiteration of the loop
-        for (int vert = 0; vert < 4; vert++)
-        {
-            curr[vert] = next[vert];
+    std::ifstream file(filename);
+    std::string line;
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string type;
+        iss >> type;
+
+        if (type == "v") {
+            Vector3 pos;
+            iss >> pos.x >> pos.y >> pos.z;
+            positions.push_back(pos);
         }
-        //glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(Vector2), next);
-        //glDrawArrays(GL_LINE_LOOP, 0, 4);
+        else if (type == "vt") {
+            Vector2 tex;
+            iss >> tex.x >> tex.y;
+            texCoords.push_back(tex);
+        }
+        else if (type == "vn") {
+            Vector3 normal;
+            iss >> normal.x >> normal.y >> normal.z;
+            normals.push_back(normal);
+        }
+        else if (type == "f") {
+            unsigned int p, t, n;
+            for (int i = 0; i < 3; i++) {
+                char slash;
+                iss >> p >> slash >> t >> slash >> n;
+                posIndices.push_back(p - 1);
+                texIndices.push_back(t - 1);
+                normalIndices.push_back(n - 1);
+            }
+        }
     }
-    return points;
+
+    for (unsigned int i = 0; i < posIndices.size(); i++) {
+        Vertex vertex;
+        vertex.position = positions[posIndices[i]];
+        vertex.texCoord = texCoords[texIndices[i]];
+        vertex.normal = normals[normalIndices[i]];
+        vertices.push_back(vertex);
+    }
+
+    return vertices;
 }
 
-//int to specify the amount of iterations
-int numIterations = 12;
-//Creating the squares and their vertices to be called in the switch case
-std::vector<Vector2> squares = CreateSquares(numIterations);
-
-int main(void)
-{
-    // Lines 20-40 are all window creation. You can ignore this if you want ;)
+int main(void) {
     assert(glfwInit() == GLFW_TRUE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -82,222 +92,100 @@ int main(void)
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 #endif
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Graphics 1", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "3D Graphics Programming Assignment 3", NULL, NULL);
     glfwMakeContextCurrent(window);
     assert(gladLoadGLLoader((GLADloadproc)glfwGetProcAddress));
     glfwSetKeyCallback(window, key_callback);
-
 #ifdef NDEBUG
 #else
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(glDebugOutput, nullptr);
 #endif
 
-    // Vertex shaders:
+// Vertex shaders:
     GLuint vs = CreateShader(GL_VERTEX_SHADER, "./assets/shaders/default.vert");
     GLuint vsLines = CreateShader(GL_VERTEX_SHADER, "./assets/shaders/lines.vert");
     GLuint vsVertexPositionColor = CreateShader(GL_VERTEX_SHADER, "./assets/shaders/vertex_color.vert");
     GLuint vsColorBufferColor = CreateShader(GL_VERTEX_SHADER, "./assets/shaders/buffer_color.vert");
-    
+
     // Fragment shaders:
     GLuint fsLines = CreateShader(GL_FRAGMENT_SHADER, "./assets/shaders/lines.frag");
     GLuint fsUniformColor = CreateShader(GL_FRAGMENT_SHADER, "./assets/shaders/uniform_color.frag");
     GLuint fsVertexColor = CreateShader(GL_FRAGMENT_SHADER, "./assets/shaders/vertex_color.frag");
-    
+
     // Shader programs:
     GLuint shaderUniformColor = CreateProgram(vs, fsUniformColor);
     GLuint shaderVertexPositionColor = CreateProgram(vsVertexPositionColor, fsVertexColor);
     GLuint shaderVertexBufferColor = CreateProgram(vsColorBufferColor, fsVertexColor);
     GLuint shaderLines = CreateProgram(vsLines, fsLines);
 
-    // Positions of our triangle's vertices (CCW winding-order)
-    Vector3 positions[] =
-    {
-        0.5f, -0.5f, 0.0f,  // vertex 1 (bottom-right)
-        0.0f, 0.5f, 0.0f,   // vertex 2 (top-middle)
-        -0.5f, -0.5f, 0.0f  // vertex 3 (bottom-left)
-    };
+    // Load OBJ file
+    std::vector<Vertex> modelVertices = LoadOBJ("./assets/models/head.obj");
+    //std::vector<Vertex> modelVertices = LoadOBJ("./assets/models/plane.obj");
 
-    // Colours of our triangle's vertices (xyz = rgb)
-    Vector3 colours[] =
-    {
-        1.0f, 0.0f, 0.0f,   // vertex 1
-        0.0f, 1.0f, 0.0f,   // vertex 2
-        0.0f, 0.0f, 1.0f    // vertex 3
-    };
+    // Create and bind VAO
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
 
-    
+    // Create and bind VBO
+    GLuint vbo;
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, modelVertices.size() * sizeof(Vertex), modelVertices.data(), GL_STATIC_DRAW);
 
-    // vao = "Vertex Array Object". A vao is a collection of vbos.
-    // vbo = "Vertex Buffer Object". "Buffer" generally means "group of memory".
-    // A vbo is a piece of graphics memory VRAM.
-    GLuint vao, pbo, cbo;       // pbo = "position buffer object", "cbo = color buffer object"
-    glGenVertexArrays(1, &vao); // Allocate a vao handle
-    glBindVertexArray(vao);     // Bind = "associate all bound buffer object with the current array object"
-    
-    // Create position buffer:
-    glGenBuffers(1, &pbo);              // Allocate a vbo handle
-    glBindBuffer(GL_ARRAY_BUFFER, pbo); // Associate this buffer with the bound vertex array
-    glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(Vector3), positions, GL_STATIC_DRAW);  // Upload the buffer
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vector3), 0);          // Describe the buffer
+    // Set up vertex attribute pointers
     glEnableVertexAttribArray(0);
-
-    // Create color buffer:
-    glGenBuffers(1, &cbo);              // Allocate a vbo handle
-    glBindBuffer(GL_ARRAY_BUFFER, cbo); // Associate this buffer with the bound vertex array
-    glBufferData(GL_ARRAY_BUFFER, 3 * sizeof(Vector3), colours, GL_STATIC_DRAW);    // Upload the buffer
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vector3), 0);          // Describe the buffer
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
 
-    GLuint vaoLines, pboLines, cboLines;
-    glGenVertexArrays(1, &vaoLines);
-    glBindVertexArray(vaoLines);
-
-    glGenBuffers(1, &pboLines);
-    glBindBuffer(GL_ARRAY_BUFFER, pboLines);
-
-
-    // In summary, we need 3 things to render:
-    // 1. Vertex data -- right now just positions.
-    // 2. Shader -- vs forwards input, fs colours.
-    // 3. Draw call -- draw 3 vertices interpreted as a triangle (GL_TRIANGLES)
-    // *** Everything is just data and behaviour ***
-    // *** vao & vbo describe data, shaders describe behaviour ***
-
-    // Fetch handles to uniform ("constant") variables.
-    // OpenGL handles are like addresses (&) in c++ -- they tell us the location of our data on the GPU.
-    // In the case of uniforms, we need to know their handle (location) before we can use them!
     GLint u_color = glGetUniformLocation(shaderUniformColor, "u_color");
     GLint u_intensity = glGetUniformLocation(shaderUniformColor, "u_intensity");
+    GLint u_visualizeMode = glGetUniformLocation(shaderUniformColor, "u_visualizeMode");
 
     int object = 0;
     printf("Object %i\n", object + 1);
 
     Matrix view = LookAt({ 0.0f, 0.0f, 5.0f }, V3_ZERO, V3_UP);
     Matrix proj = Ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 10.0f);
-    // Optional homework: use the Perspective function to see how the projection changes!
 
-    /* Loop until the user closes the window */
-    while (!glfwWindowShouldClose(window))
-    {
+    while (!glfwWindowShouldClose(window)) {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         float time = glfwGetTime();
-
-        // Interpolation parameter (0 means fully A, 1 means fully B)
         float a = cosf(time) * 0.5f + 0.5f;
+        
+        //Scale, Rotation, Translation and Color
+        Vector3 sC = V3_ONE * 5.0f;
+        Quaternion rC = FromEuler(0.0f, 90.0f * DEG2RAD, 0.0f);
+        Vector3 tC = V3_ZERO;
+        Vector3 cC = Lerp(V3_UP, V3_FORWARD, time);
 
-        // Interpolate scale
-        Vector3 sA = V3_ONE;
-        Vector3 sB = V3_ONE * 10.0f;
-        Vector3 sC = Lerp(sA, sB, a);
-
-        // Interpolate rotation (slerp = "spherical lerp" because we rotate in a circle) 
-        Quaternion rA = QuaternionIdentity();
-        Quaternion rB = FromEuler(0.0f, 0.0f, 90.0f * DEG2RAD);
-        Quaternion rC = Slerp(rA, rB, a);
-
-        // Interpolate translation
-        Vector3 tA = { -10.0f, 0.0f, 0.0f };
-        Vector3 tB = {  10.0f, 0.0f, 0.0f };
-        Vector3 tC = Lerp(tA, tB, a);
-
-        // Interpolate color
-        Vector3 cA = V3_UP;
-        Vector3 cB = V3_FORWARD;
-        Vector3 cC = Lerp(cA, cB, a);
-
-        Matrix s = Scale(sC);
-        Matrix r = ToMatrix(rC);
-        Matrix t = Translate(tC);
-
-        Matrix world = s * r * t;
+        Matrix world = Scale(sC) * ToMatrix(rC) * Translate(tC);
         Matrix mvp = world * view * proj;
-        GLint u_mvp = GL_NONE;
 
-        GLuint shaderProgram = GL_NONE;
+        GLuint shaderProgram = shaderUniformColor;
+        glUseProgram(shaderProgram);
 
-        switch (object + 1)
-        {
-        case 1:
-            shaderProgram = shaderVertexBufferColor;
-            glUseProgram(shaderProgram);
-            u_mvp = glGetUniformLocation(shaderProgram, "u_mvp");
-            glUniformMatrix4fv(u_mvp, 1, GL_FALSE, ToFloat16(mvp).v);
-            //glUniform3fv(u_color, 1, &cC.x);
-            //glUniform1f(u_intensity, a);
-            glBindVertexArray(vao);
-            glDrawArrays(GL_TRIANGLES, 0, 3);
-            break;
+        GLint u_mvp = glGetUniformLocation(shaderProgram, "u_mvp");
+        glUniformMatrix4fv(u_mvp, 1, GL_FALSE, ToFloat16(mvp).v);
+        glUniform3fv(u_color, 1, &cC.x);
+        glUniform1f(u_intensity, 1.0f);
+        glUniform1i(u_visualizeMode, object % 2); // Toggle between texcoords and normals visualization
 
-        case 2:
-            shaderProgram = shaderVertexBufferColor;
-            glUseProgram(shaderProgram);
-            u_mvp = glGetUniformLocation(shaderProgram, "u_mvp");
-            glUniformMatrix4fv(u_mvp, 1, GL_FALSE, ToFloat16(mvp).v);
-            //glUniform3fv(u_color, 1, &cC.x);
-            //glUniform1f(u_intensity, 1.0f);
-            glBindVertexArray(vao);
-            glDrawArrays(GL_LINE_LOOP, 0, 3);
-            break;
+        glBindVertexArray(vao);
+        glDrawArrays(GL_TRIANGLES, 0, modelVertices.size());
 
-        case 3:
-            // TODO -- read up on glBufferSubData to understand what on earth just happened ;)
-            shaderProgram = shaderLines;
-            glUseProgram(shaderProgram);
-            glUniform1f(glGetUniformLocation(shaderProgram, "u_a"), a);
-            glLineWidth(2.0f);
-            glBindVertexArray(vaoLines);
-
-            //Calling the function created before to get the size and data
-            glBufferData(GL_ARRAY_BUFFER, squares.size() * sizeof(Vector2), squares.data(), GL_STATIC_DRAW);
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vector2), nullptr);
-            glEnableVertexAttribArray(0);
-
-            //Draw the created vertices with however many loops desired
-            for (int i = 0; i < numIterations; i++)
-            {
-                glDrawArrays(GL_LINE_LOOP, i*4, 4);
-            }
-
-            break;
-
-        case 4:
-            shaderProgram = shaderUniformColor;
-            glUseProgram(shaderProgram);
-            u_mvp = glGetUniformLocation(shaderProgram, "u_mvp");
-            glUniformMatrix4fv(u_mvp, 1, GL_FALSE, ToFloat16(mvp).v);
-            glUniform3fv(u_color, 1, &cC.x);
-            glUniform1f(u_intensity, 1.0);
-            glBindVertexArray(vao);
-            glDrawArrays(GL_TRIANGLES, 0, 3);
-            break;
-
-        case 5:
-            shaderProgram = shaderUniformColor;
-            glUseProgram(shaderProgram);
-            u_mvp = glGetUniformLocation(shaderProgram, "u_mvp");
-            glUniformMatrix4fv(u_mvp, 1, GL_FALSE, ToFloat16(mvp).v);
-            glUniform3fv(u_color, 1, &cC.x);
-            glUniform1f(u_intensity, 1.0f - a);
-            glBindVertexArray(vao);
-            glDrawArrays(GL_TRIANGLES, 0, 3);
-            break;
+        if (IsKeyPressed(GLFW_KEY_SPACE)) {
+            ++object %= 2;
+            printf("Visualization mode: %s\n", object == 0 ? "Texture Coordinates" : "Normals");
         }
 
-        // Change object when space is pressed
-        if (IsKeyPressed(GLFW_KEY_SPACE))
-        {
-            ++object %= 5;
-            printf("Object %i\n", object + 1);
-        }
-
-        /* Swap front and back buffers */
         glfwSwapBuffers(window);
-
-        /* Poll and process events */
         memcpy(gKeysPrev.data(), gKeysCurr.data(), GLFW_KEY_LAST * sizeof(int));
         glfwPollEvents();
     }
@@ -441,21 +329,6 @@ void APIENTRY glDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum 
     case GL_DEBUG_SEVERITY_NOTIFICATION: std::cout << "Severity: notification"; break;
     } std::cout << std::endl;
     std::cout << std::endl;
-}
-
-bool IsKeyDown(int key)
-{
-    return gKeysCurr[key] == GLFW_PRESS;
-}
-
-bool IsKeyUp(int key)
-{
-    return gKeysCurr[key] == GLFW_RELEASE;
-}
-
-bool IsKeyPressed(int key)
-{
-    return gKeysPrev[key] == GLFW_PRESS && gKeysCurr[key] == GLFW_RELEASE;
 }
 
 void Print(Matrix m)

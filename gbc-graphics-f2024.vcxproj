@@ -85,8 +85,14 @@
     <ClInclude Include="src\Math.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="assets\shaders\buffer_color.vert" />
+    <None Include="assets\shaders\default.vert" />
     <None Include="assets\shaders\lines.frag" />
     <None Include="assets\shaders\lines.vert" />
+    <None Include="assets\shaders\uniform_color.frag" />
+    <None Include="assets\shaders\vertex_color.frag" />
+    <None Include="assets\shaders\vertex_color.vert" />
+    <None Include="uniform_color.frag" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
