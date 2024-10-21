@@ -172,7 +172,9 @@ int main(void) {
         glUseProgram(shaderProgram);
 
         GLint u_mvp = glGetUniformLocation(shaderProgram, "u_mvp");
+        GLint u_model = glGetUniformLocation(shaderProgram, "u_model");
         glUniformMatrix4fv(u_mvp, 1, GL_FALSE, ToFloat16(mvp).v);
+        glUniformMatrix4fv(u_model, 1, GL_FALSE, ToFloat16(world).v);
         glUniform3fv(u_color, 1, &cC.x);
         glUniform1f(u_intensity, 1.0f);
         glUniform1i(u_visualizeMode, object % 2); // Toggle between texcoords and normals visualization
